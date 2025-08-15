@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Home, Search, PlusSquare, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,10 +11,18 @@ interface InstagramBottomNavProps {
 
 export const InstagramBottomNav = ({ activeTab = "home", onTabChange }: InstagramBottomNavProps) => {
   const [currentTab, setCurrentTab] = useState(activeTab);
+  const navigate = useNavigate();
 
   const handleTabChange = (tab: string) => {
     setCurrentTab(tab);
     onTabChange?.(tab);
+    
+    // Navigate to appropriate routes
+    if (tab === "home") {
+      navigate("/");
+    } else if (tab === "profile") {
+      navigate("/profile");
+    }
   };
 
   const tabs = [
