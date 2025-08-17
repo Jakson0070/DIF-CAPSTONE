@@ -1,5 +1,6 @@
-import { Heart, MessageCircle, PlusSquare } from "lucide-react";
+import { Camera, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface InstagramNavbarProps {
   notificationCount?: number;
@@ -7,42 +8,45 @@ interface InstagramNavbarProps {
 
 export const InstagramNavbar = ({ notificationCount = 0 }: InstagramNavbarProps) => {
   return (
-    <div className="sticky top-0 bg-background border-b border-border z-50 backdrop-blur-sm bg-background/95">
-      <div className="flex items-center justify-between px-4 py-3 max-w-md mx-auto">
-        <div 
-          className="text-2xl font-bold bg-gradient-to-r from-[hsl(45_100%_51%)] via-[hsl(315_100%_50%)] to-[hsl(262_83%_58%)] bg-clip-text text-transparent cursor-pointer"
-          style={{ fontFamily: 'Billabong, cursive' }}
+    <div className="sticky top-0 bg-white/95 dark:bg-zinc-900/95 border-b border-gray-200 dark:border-zinc-800 z-50 backdrop-blur-md">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 max-w-[935px] mx-auto">
+        {/* Camera Icon (Left) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-xl text-gray-900 dark:text-zinc-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all duration-200"
+          aria-label="Open camera"
         >
-          Instagram
+          <Camera className="h-8 w-8" />
+        </Button>
+
+        {/* Instagram Logo (Center) */}
+        <div className="flex items-center justify-center flex-1">
+          {/* Light mode logo */}
+          <img
+            src="/Instagram Logo.png"
+            alt="Instagram Logo"
+            className="h-12 w-auto dark:hidden"
+          />
+          {/* Dark mode logo */}
+          <img
+            src="/Instagram Light.png"
+            alt="Instagram Logo Light"
+            className="h-12 w-auto hidden dark:block"
+          />
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 hover:bg-muted/80 transition-colors"
+
+        {/* Send Message Icon (Right) */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-xl text-gray-900 dark:text-zinc-100 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all duration-200 relative"
+            aria-label="Direct messages"
           >
-            <PlusSquare className="h-6 w-6" />
+            <Send className="h-8 w-8" />
           </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 hover:bg-muted/80 transition-colors relative"
-          >
-            <Heart className="h-6 w-6" />
-            {notificationCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {notificationCount > 9 ? '9+' : notificationCount}
-              </span>
-            )}
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 hover:bg-muted/80 transition-colors"
-          >
-            <MessageCircle className="h-6 w-6" />
-          </Button>
+          <ThemeToggle />
         </div>
       </div>
     </div>
