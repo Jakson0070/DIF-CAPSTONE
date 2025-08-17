@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+// src/hooks/useInstagram.tsx
+import { useState, useCallback, useEffect } from 'react';
 
 export interface Story {
   id: string;
@@ -10,24 +11,34 @@ export interface Story {
   storyImages: string[];
 }
 
+export interface Comment {
+  _id: string;
+  id: string;
+  userId: {
+    _id: string;
+    username: string;
+    profilePicture?: string;
+  } | string;
+  username: string;
+  text: string;
+  timeAgo: string;
+  createdAt: string;
+}
+
 export interface Post {
   id: string;
+  _id?: string;
   username: string;
   userImage: string;
   postImage: string;
+  mediaUrl?: string;
   likes: number;
   caption: string;
   timeAgo: string;
   isLiked: boolean;
   isSaved: boolean;
   comments: Comment[];
-}
-
-export interface Comment {
-  id: string;
-  username: string;
-  text: string;
-  timeAgo: string;
+  createdAt?: string;
 }
 
 const initialStories: Story[] = [
@@ -66,69 +77,152 @@ const initialStories: Story[] = [
   },
 ];
 
-const initialPosts: Post[] = [
-  {
-    id: "1",
-    username: "johndoe",
-    userImage: "",
-    postImage: "https://picsum.photos/400/400?random=1",
-    likes: 142,
-    caption: "Beautiful sunset from my balcony 🌅",
-    timeAgo: "2 hours ago",
-    isLiked: false,
-    isSaved: false,
-    comments: [
-      { id: "c1", username: "jane_smith", text: "Amazing view! 😍", timeAgo: "1h" },
-      { id: "c2", username: "travel_lover", text: "Where is this?", timeAgo: "45m" },
-    ],
-  },
-  {
-    id: "2",
-    username: "jane_smith",
-    userImage: "",
-    postImage: "https://picsum.photos/400/400?random=2",
-    likes: 89,
-    caption: "Weekend vibes ✨ #weekend #relax",
-    timeAgo: "4 hours ago",
-    isLiked: true,
-    isSaved: false,
-    comments: [
-      { id: "c3", username: "foodie_lover", text: "Love this energy!", timeAgo: "2h" },
-    ],
-  },
-  {
-    id: "3",
-    username: "travel_addict",
-    userImage: "",
-    postImage: "https://picsum.photos/400/400?random=3",
-    likes: 256,
-    caption: "Exploring the mountains today! Nature never fails to amaze me 🏔️",
-    timeAgo: "6 hours ago",
-    isLiked: false,
-    isSaved: true,
-    comments: [],
-  },
-];
-
 export const useInstagram = () => {
   const [stories, setStories] = useState<Story[]>(initialStories);
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Helper function to get token
+  const getToken = () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.error('No authentication token found');
+      setError('Please log in to view posts');
+      return null;
+    }
+    return token;
+  };
+
+  // Transform backend post to frontend post format
+  const transformPost = (backendPost: any): Post => {
+    return {
+      id: backendPost._id?.toString() || backendPost.id,
+      _id: backendPost._id,
+      username: backendPost.userId?.username || backendPost.username || 'Unknown',
+      userImage: backendPost.userId?.profilePicture || backendPost.userImage || '',
+      postImage: backendPost.mediaUrl || backendPost.postImage || '',
+      mediaUrl: backendPost.mediaUrl,
+      likes: backendPost.likes || 0,
+      caption: backendPost.caption || '',
+      timeAgo: backendPost.createdAt
+        ? Math.floor((Date.now() - new Date(backendPost.createdAt).getTime()) / (1000 * 60 * 60)) + 'h'
+        : backendPost.timeAgo || 'Unknown',
+      isLiked: backendPost.isLiked || false,
+      isSaved: backendPost.isSaved || false,
+      comments: (backendPost.comments || []).map((comment: any) => ({
+        _id: comment._id,
+        id: comment._id || comment.id,
+        userId: comment.userId,
+        username: typeof comment.userId === 'object' ? comment.userId.username : comment.username || 'Unknown',
+        text: comment.text || comment.content || '',
+        timeAgo: comment.createdAt
+          ? Math.floor((Date.now() - new Date(comment.createdAt).getTime()) / (1000 * 60)) + 'm'
+          : 'now',
+        createdAt: comment.createdAt
+      })),
+      createdAt: backendPost.createdAt
+    };
+  };
+
+  // Expose fetchPosts for manual refresh
+  const fetchPosts = useCallback(async () => {
+    console.log('Starting fetchPosts...');
+    setLoading(true);
+    setError(null);
+    
+    const token = getToken();
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      console.log('API URL:', apiUrl);
+      console.log('Token exists:', !!token);
+      
+      const res = await fetch(`${apiUrl}/api/posts/feed`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Response status:', res.status);
+      console.log('Response ok:', res.ok);
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Fetched posts:', data);
+        const transformedPosts = data.map(transformPost);
+        setPosts(transformedPosts);
+        setError(null);
+      } else {
+        const errorData = await res.json();
+        console.error('Failed to fetch posts:', res.status, res.statusText, errorData);
+        
+        if (res.status === 401) {
+          setError('Authentication failed. Please log in again.');
+          localStorage.removeItem('token');
+        } else if (res.status === 500) {
+          setError('Server error. Please try again later.');
+        } else {
+          setError(`Error: ${errorData.error || 'Unknown error'}`);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error fetching posts:', err);
+      setError('Network error. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      fetchPosts();
+    } else {
+      console.log('No token found, skipping initial fetch');
+    }
+  }, [fetchPosts]);
+
   const [currentStory, setCurrentStory] = useState<Story | null>(null);
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
 
-  const toggleLike = useCallback((postId: string) => {
-    setPosts(prevPosts =>
-      prevPosts.map(post =>
-        post.id === postId
-          ? {
-              ...post,
-              isLiked: !post.isLiked,
-              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
-            }
-          : post
-      )
-    );
-  }, []);
+  const toggleLike = useCallback(async (postId: string, isCurrentlyLiked: boolean) => {
+    console.log(`Toggling like for postId=${postId}, isCurrentlyLiked=${isCurrentlyLiked}`);
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${apiUrl}/api/interactions/like`, {
+        method: isCurrentlyLiked ? "DELETE" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ postId }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`Like request failed: status=${response.status}, error=${JSON.stringify(errorData)}`);
+        if (errorData && errorData.error && errorData.error.includes('Already liked')) {
+          await fetchPosts();
+        }
+        return;
+      }
+      
+      console.log(`Like request successful for postId=${postId}`);
+      await fetchPosts();
+    } catch (err) {
+      console.error(`Failed to toggle like for postId=${postId}:`, err);
+    }
+  }, [fetchPosts]);
 
   const toggleSave = useCallback((postId: string) => {
     setPosts(prevPosts =>
@@ -146,7 +240,6 @@ export const useInstagram = () => {
       setCurrentStory(story);
       setCurrentStoryIndex(0);
       
-      // Mark story as viewed
       setStories(prevStories =>
         prevStories.map(s =>
           s.id === storyId ? { ...s, isViewed: true } : s
@@ -169,7 +262,6 @@ export const useInstagram = () => {
       setCurrentStory(nextStoryData);
       setCurrentStoryIndex(0);
       
-      // Mark next story as viewed
       setStories(prevStories =>
         prevStories.map(s =>
           s.id === nextStoryData.id ? { ...s, isViewed: true } : s
@@ -184,35 +276,64 @@ export const useInstagram = () => {
     if (!currentStory) return;
     
     const currentIndex = stories.findIndex(s => s.id === currentStory.id);
-    if (currentIndex > 1) { // Skip "Your Story" at index 0
+    if (currentIndex > 1) {
       const prevStoryData = stories[currentIndex - 1];
       setCurrentStory(prevStoryData);
       setCurrentStoryIndex(0);
     }
   }, [currentStory, stories]);
 
-  const addComment = useCallback((postId: string, text: string) => {
-    const newComment: Comment = {
-      id: Date.now().toString(),
-      username: "you",
-      text,
-      timeAgo: "now",
-    };
+  const addComment = useCallback(async (postId: string, text: string) => {
+    const token = getToken();
+    if (!token) return;
 
-    setPosts(prevPosts =>
-      prevPosts.map(post =>
-        post.id === postId
-          ? { ...post, comments: [...post.comments, newComment] }
-          : post
-      )
-    );
-  }, []);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const res = await fetch(`${apiUrl}/api/interactions/comment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ postId, text }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Optimistically add the new comment to the relevant post
+        setPosts(prevPosts => prevPosts.map(post => {
+          if (post.id === postId) {
+            const newComment = {
+              _id: data._id,
+              id: data._id,
+              userId: data.userId || { username: 'You' },
+              username: (typeof data.userId === 'object' && data.userId.username) || 'You',
+              text,
+              timeAgo: 'now',
+              createdAt: data.createdAt || new Date().toISOString(),
+            };
+            return { ...post, comments: [...post.comments, newComment] };
+          }
+          return post;
+        }));
+        // Optionally, you can refetch later or on modal close for sync
+        // fetchPosts();
+      } else {
+        const errorData = await res.json();
+        console.error('Failed to add comment:', errorData);
+      }
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+    }
+  }, [fetchPosts]);
 
   return {
     stories,
     posts,
     currentStory,
     currentStoryIndex,
+    loading,
+    error,
     toggleLike,
     toggleSave,
     viewStory,
@@ -220,5 +341,6 @@ export const useInstagram = () => {
     nextStory,
     prevStory,
     addComment,
+    refetchPosts: fetchPosts,
   };
-};
+}
